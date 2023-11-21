@@ -5,10 +5,10 @@
 本次 Lab 中，大家将会实现渲染部分介绍的几种重要的算法或思想：
 
  1. Phong/Blinn-Phong 光照模型 （[第十二章讲义](https://vcl.pku.edu.cn/course/vci/notes/12-shading-notes.pdf)12.3节）
- 2. 实时渲染中的环境映射技术 （[第十五章讲义](https://vcl.pku.edu.cn/course/vci/notes/15-texture-notes.pdf)15.4节）
+ 2. 实时渲染中的环境映射技术 （[第十四章讲义](https://vcl.pku.edu.cn/course/vci/notes/14-texture-notes.pdf)14.4节）
  3. 非真实感渲染 （[第十二章讲义](https://vcl.pku.edu.cn/course/vci/notes/12-shading-notes.pdf)12.6节）
- 4. 实时渲染中的阴影映射技术 （[第十五章讲义](https://vcl.pku.edu.cn/course/vci/notes/15-texture-notes.pdf)15.4节）
- 5. 光线追踪离线渲染框架 （[第十四章讲义](https://vcl.pku.edu.cn/course/vci/notes/14-ray-tracing-notes.pdf)14.1和14.2节）
+ 4. 实时渲染中的阴影映射技术 （[第十四章讲义](https://vcl.pku.edu.cn/course/vci/notes/14-texture-notes.pdf)14.4节）
+ 5. 光线追踪离线渲染框架 （[第十五章讲义](https://vcl.pku.edu.cn/course/vci/notes/15-global-illumination-notes.pdf)15.2和15.3节）
 
 Lab 3 中同学们将自己动手完成一个渲染器的构建。大家的任务是填补 `Labs/3-Rendering/tasks.cpp` 以及 `Labs/3-Rendering/shaders/*.*` 中的空缺部分，请参考下述具体任务的介绍。请务必**独立**完成自己的代码。
 
@@ -81,7 +81,7 @@ Blinn-Phong 光照算法实现的结果如下：
 1. https://learnopengl-cn.github.io/05%20Advanced%20Lighting/03%20Shadows/01%20Shadow%20Mapping/
 2. https://learnopengl-cn.github.io/05%20Advanced%20Lighting/03%20Shadows/02%20Point%20Shadows/
 
-与这个任务相关的 shader 比较多，但是只需要同学们补全其中的两个，每个只需要添加最多**两行代码**：`shadowmap.vert` 和 `shadowmap.frag` 用于生成有向光源的阴影贴图，`phong-shadow.vert` 和 `phong-shadow.frag` 用于在 Shading 中使用有向光源的阴影贴图计算光照；`shadowcubemap.vert` 、 `shadowcubemap.geom` 和 `shadowcubemap.frag` 用于生成点光源的阴影贴图，`phong-shadowcubemap.vert` 和 `phong-shadowcubemap.frag` 用于在 Shading 中使用点光源的阴影贴图计算光照；我们将用于生成阴影贴图的 shader 提供给大家，请大家阅读并理解生成阴影贴图的过程。需要同学们补全 `phong-shadow.frag` 和 `phong-shadowcubemap.frag` 这两个 shader。请首先将 Task 1 中的 `Shade()` 函数拷贝到这两个shader中，然后补全 `Shadow()` 函数。
+与这个任务相关的 shader 比较多，但是只需要同学们补全其中的两个，每个只需要添加最多**两行代码**：`shadowmap.vert` 和 `shadowmap.frag` 用于生成有向光源的阴影贴图，`phong-shadow.vert` 和 `phong-shadow.frag` 用于在 Shading 中使用有向光源的阴影贴图计算光照；`shadowcubemap.vert` 、 `shadowcubemap.geom` 和 `shadowcubemap.frag` 用于生成点光源的阴影贴图，`phong-shadowcubemap.vert` 和 `phong-shadowcubemap.frag` 用于在 Shading 中使用点光源的阴影贴图计算光照；我们将用于生成阴影贴图的 shader 提供给大家，请大家阅读并理解生成阴影贴图的过程。需要同学们补全 `phong-shadow.frag` 和 `phong-shadowcubemap.frag` 这两个 shader。请首先将 Task 1 中的 `Shade()` 函数拷贝到这两个 shader 中，然后补全 `Shadow()` 函数。
 
 在阅读和补全代码的过程中，请在报告中回答下面的问题：
 
@@ -92,12 +92,12 @@ Blinn-Phong 光照算法实现的结果如下：
 
 请阅读并理解讲义中介绍的 Ray Tracing 算法。这个算法来自 1980 年 Whitted 提出的反复执行 Ray Casting 的思想，因此又被称为 Whitted-Style Ray Tracing ，这一算法也是现在渲染领域光线追踪技术的雏形。
 
-你需要先实现 `tasks.cpp` 中 `bool IntersectTriangle(Intersection & output, Ray const & ray, glm::vec3 const & p1, glm::vec3 const & p2, glm::vec3 const & p3)` 函数。这个函数求光线 `ray` 与三角形 `(p1, p2, p3)` 之间的交点，如果交点存在，在 `output` 中设置交点与光线原点的距离 `t` 以及交点在三角形中的质心坐标 `(u, v)` 并返回 `true` ；否则返回 `false` 。这里定义的质心坐标与纹理映射讲义中的符号略有不同，`(u, v)` 满足对于三角形内任意一点 `p` ， `p = (1-u-v)*p1 + u*p2 + v*p3` ，其中各项系数都大于0. 光线求交算法的实现不要求与上课所讲方法一致，同学们可以自行调研实现不同的算法。部分参考资料如下：
+你需要先实现 `tasks.cpp` 中 `bool IntersectTriangle(Intersection & output, Ray const & ray, glm::vec3 const & p1, glm::vec3 const & p2, glm::vec3 const & p3)` 函数。这个函数求光线 `ray` 与三角形 `(p1, p2, p3)` 之间的交点，如果交点存在，在 `output` 中设置交点与光线原点的距离 `t` 以及交点在三角形中的质心坐标 `(u, v)` 并返回 `true` ；否则返回 `false` 。这里定义的质心坐标与纹理映射讲义中的符号略有不同，`(u, v)` 满足对于三角形内任意一点 `p` ， `p = (1-u-v)*p1 + u*p2 + v*p3` ，其中各项系数都大于 0 。光线求交算法的实现不要求与上课所讲方法一致，同学们可以自行调研实现不同的算法。部分参考资料如下：
 
 1. [Fast, minimum storage ray/triangle intersection](https://dl.acm.org/doi/10.1145/1198555.1198746)
 2. [Plücker Coordinate Tutorial](http://www.realtimerendering.com/resources/RTNews/html/rtnv11n1.html#art3)
 
-完成上面的函数之后，请根据对 Ray Tracing 算法的理解，阅读并填补 `task.cpp` 中光线追踪函数 `RayTrace` 中的着色部分。光线与场景求交形成的位置、法向、反照率、吸收率、透明度、高光衰减指数都已在函数内给出。在完成着色部分之后，阅读讲义中 Shadow Ray 的思想，最后在光线追踪中实现阴影。你可以使用 `auto hit = intersector.IntersectRay(Ray(pos, dir));` 语句来对光线求交；为了简化实现，在计算阴影过程中，如果光源与着色点之间存在遮挡物，近似认为 `alpha < 0.2` 的遮挡物视为透明，而 `alpha >= 0.2` 的遮挡物视为不可透过。这里透明度 `alpha = hit.IntersectAlbedo.w` 。无阴影的场景（以 3 次反射、无超采样的 Cornell Box 为例）示例如下：
+完成上面的函数之后，请根据对 Ray Tracing 算法的理解，阅读并填补 `tasks.cpp` 中光线追踪函数 `RayTrace` 中的着色部分。光线与场景求交形成的位置、法向、反照率、吸收率、透明度、高光衰减指数都已在函数内给出。在完成着色部分之后，阅读讲义中 Shadow Ray 的思想，最后在光线追踪中实现阴影。你可以使用 `auto hit = intersector.IntersectRay(Ray(pos, dir));` 语句来对光线求交；为了简化实现，在计算阴影过程中，如果光源与着色点之间存在遮挡物，近似认为 `alpha < 0.2` 的遮挡物视为透明，而 `alpha >= 0.2` 的遮挡物视为不可透过。这里透明度 `alpha = hit.IntersectAlbedo.w` 。无阴影的场景（以 3 次反射、无超采样的 Cornell Box 为例）示例如下：
 
 ![](images/raytracing.png)
 
