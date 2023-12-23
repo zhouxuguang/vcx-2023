@@ -26,6 +26,19 @@ namespace VCX::Labs::Drawing2D {
         ImageRGB &       output,
         ImageRGB const & input) {
         // your code here:
+        
+        std::default_random_engine random(time(NULL));
+        std::uniform_real_distribution<float> uniformDist(-0.5, std::nextafter(0.5, FLT_MAX));
+        
+        for (std::size_t x = 0; x < input.GetSizeX(); ++x)
+        {
+            for (std::size_t y = 0; y < input.GetSizeY(); ++y) 
+            {
+                glm::vec3 color = input.At(x, y);
+                float randomValue = uniformDist(random);
+                output.At(x, y) = {color.r + randomValue, color.g + randomValue, color.b + randomValue,};
+            }
+        }
     }
 
     void DitheringRandomBlueNoise(
