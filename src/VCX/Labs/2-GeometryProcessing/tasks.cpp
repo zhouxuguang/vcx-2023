@@ -28,19 +28,42 @@ namespace VCX::Labs::GeometryProcessing {
             // We reserve memory first for efficiency.
             curr_mesh.Positions.reserve(prev_mesh.Positions.size() * 3 / 2);
             curr_mesh.Indices.reserve(prev_mesh.Indices.size() * 4);
-            // Then we iteratively update currently existing vertices.
+            // Then we iteratively update currently existing vertices. 这里是更新老的顶点
             for (std::size_t i = 0; i < prev_mesh.Positions.size(); ++i) {
                 // Update the currently existing vetex v from prev_mesh.Positions.
                 // Then add the updated vertex into curr_mesh.Positions.
                 auto v           = G.Vertex(i);
                 auto neighbors   = v->Neighbors();
+                int n = (int)neighbors.size();
                 // your code here:
+                float u = 3.0f / (8 * n);
+                if (3 == n)
+                {
+                    u = 3.0f / 16;
+                }
+                
+                float x = 0;
+                float y = 0;
+                float z = 0;
+                for (int k = 0; k < n; k ++)
+                {
+                    x += u * prev_mesh.Positions[neighbors[k]].x;
+                    y += u * prev_mesh.Positions[neighbors[k]].y;
+                    z += u * prev_mesh.Positions[neighbors[k]].z;
+                }
+                
+                x += (1.0 - n * u) * prev_mesh.Positions[i].x;
+                y += (1.0 - n * u) * prev_mesh.Positions[i].y;
+                z += (1.0 - n * u) * prev_mesh.Positions[i].z;
+                
+                curr_mesh.Positions.push_back(glm::vec3(x, y, z));
             }
             // We create an array to store indices of the newly generated vertices.
             // Note: newIndices[i][j] is the index of vertex generated on the "opposite edge" of j-th
             //       vertex in the i-th triangle.
+            // newIndices 通俗的解释是原先三角形上每条边对应的新生成的顶点索引
             std::vector<std::array<std::uint32_t, 3U>> newIndices(prev_mesh.Indices.size() / 3, { ~0U, ~0U, ~0U });
-            // Iteratively process each halfedge.
+            // 遍历原先mesh的每一条边
             for (auto e : G.Edges()) {
                 // newIndices[face index][vertex index] = index of the newly generated vertex
                 newIndices[G.IndexOf(e->Face())][e->EdgeLabel()] = curr_mesh.Positions.size();
@@ -49,6 +72,16 @@ namespace VCX::Labs::GeometryProcessing {
                 if (! eTwin) {
                     // When there is no twin halfedge (so, e is a boundary edge):
                     // your code here: generate the new vertex and add it into curr_mesh.Positions.
+                    int fromIdx = e->From();
+                    int toIdx = e->To();
+                    glm::vec3 from = curr_mesh.Positions[fromIdx];
+                    glm::vec3 to = curr_mesh.Positions[toIdx];
+                    glm::vec3 newPoint;
+                    newPoint.x = (from.x + to.x) * 0.5;
+                    newPoint.y = (from.y + to.y) * 0.5;
+                    newPoint.z = (from.z + to.z) * 0.5;
+                    curr_mesh.Positions.push_back(newPoint);
+                    
                 } else {
                     // When the twin halfedge exists, we should also record:
                     //     newIndices[face index][vertex index] = index of the newly generated vertex
@@ -56,6 +89,22 @@ namespace VCX::Labs::GeometryProcessing {
                     //     we have to record twice.
                     newIndices[G.IndexOf(eTwin->Face())][e->TwinEdge()->EdgeLabel()] = curr_mesh.Positions.size();
                     // your code here: generate the new vertex and add it into curr_mesh.Positions.
+                    
+                    int fromIdx = e->From();
+                    int toIdx = e->To();
+                    glm::vec3 from = curr_mesh.Positions[fromIdx];
+                    glm::vec3 to = curr_mesh.Positions[toIdx];
+                    
+                    //获得两个相对的顶点
+                    int v1Idx = e->OppositeVertex();
+                    int v3Idx = eTwin->OppositeVertex();
+                    glm::vec3 v1Point = curr_mesh.Positions[v1Idx];
+                    glm::vec3 v3Point = curr_mesh.Positions[v3Idx];
+                    glm::vec3 newPoint;
+                    newPoint.x = (from.x + to.x) * (3.0f / 8.0f) + (v1Point.x + v3Point.x) * (1.0f / 8.0f);
+                    newPoint.y = (from.y + to.y) * (3.0f / 8.0f) + (v1Point.y + v3Point.y) * (1.0f / 8.0f);
+                    newPoint.z = (from.z + to.z) * (3.0f / 8.0f) + (v1Point.z + v3Point.z) * (1.0f / 8.0f);
+                    curr_mesh.Positions.push_back(newPoint);
                 }
             }
 
@@ -75,6 +124,10 @@ namespace VCX::Labs::GeometryProcessing {
                 // toInsert[i][j] stores the j-th vertex index of the i-th sub-face.
                 std::uint32_t toInsert[4][3] = {
                     // your code here:
+                    {v0, m2, m1},
+                    {m2, v1, m0},
+                    {m1, m0, v2},
+                    {m0, m1, m2},
                 };
                 // Do insertion.
                 curr_mesh.Indices.insert(
