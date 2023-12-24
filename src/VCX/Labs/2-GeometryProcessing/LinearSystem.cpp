@@ -109,7 +109,7 @@ void LinearSystem::JacobiIteration(const Matrix &A, const Vector &B, Vector &X)
     }
 }
 
-void LinearSystem::GaussSeidelIteration(const Matrix &A, const Vector &B, Vector &X)
+void LinearSystem::GaussSeidelIteration(const Matrix &A, const Vector &B, Vector &X, int iterCount)
 {
     int width = A.GetWith();
     int height = A.GetHeight();
@@ -122,11 +122,11 @@ void LinearSystem::GaussSeidelIteration(const Matrix &A, const Vector &B, Vector
     Vector diffVec;
     diffVec.resize(X.size());
     
-    int iterCount = 0;
+    int curIterCount = 0;
 
     while (true)
     {
-        iterCount ++;
+        curIterCount ++;
         for (int i = 0; i < width; ++i)
         {
             double sum = 0.0;
@@ -155,7 +155,7 @@ void LinearSystem::GaussSeidelIteration(const Matrix &A, const Vector &B, Vector
 
         std::cout << "x1 = " << X[0] << " x2 = " << X[1] << " x3 = " << X[2] << std::endl;
 
-        if (sum <= std::numeric_limits<double>::epsilon())
+        if (sum <= std::numeric_limits<double>::epsilon() || curIterCount >= iterCount)
         {
             break;
         }

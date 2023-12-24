@@ -260,8 +260,8 @@ namespace VCX::Labs::GeometryProcessing {
         //for (int k = 0; k < numIterations; ++k)
         {
             // your code here:
-            LinearSystem::GaussSeidelIteration(Weight, bx, tx);
-            LinearSystem::GaussSeidelIteration(Weight, by, ty);
+            LinearSystem::GaussSeidelIteration(Weight, bx, tx, numIterations);
+            LinearSystem::GaussSeidelIteration(Weight, by, ty, numIterations);
         }
         
         for (int i = 0; i < output.TexCoords.size(); ++i)  //固定边界点的坐标在圆周上
