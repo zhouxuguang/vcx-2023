@@ -5,6 +5,7 @@
 
 #include "Labs/2-GeometryProcessing/DCEL.hpp"
 #include "Labs/2-GeometryProcessing/tasks.h"
+#include "Labs/2-GeometryProcessing/LinearSystem.h"
 
 namespace VCX::Labs::GeometryProcessing {
 
@@ -163,10 +164,110 @@ namespace VCX::Labs::GeometryProcessing {
 
         // Set boundary UVs for boundary vertices.
         // your code here: directly edit output.TexCoords
+        
+        std::vector<std::size_t> boundary;
+        
+        //首先，找到一个边界上的点
+        for (std::size_t i = 0; i < output.Positions.size(); ++i)
+        {
+            auto v = G.Vertex(i);
+            if (v->OnBoundary())
+            {
+                boundary.push_back(i);
+                break;
+            }
+        }
+        
+        //找到第二个遍节点
+        int count = 0;
+        auto v = G.Vertex(boundary[0]);
+        auto neighbors = v->Neighbors();
+        for (auto neighbor : neighbors)
+        {
+            if (G.Vertex(neighbor)->OnBoundary())
+            {
+                ++count;
+                boundary.push_back(neighbor);
+                break;
+            }
+        }
+        
+        //根据序号找到这两个点
+        const DCEL::VertexProxy *v_hd = G.Vertex(boundary[1]);
+        const DCEL::VertexProxy *v_begin = v;
+        
+        while (v_hd != v_begin)
+        {
+            //每次从数组的最后一个点开始找下一个点
+            auto neighbors = v_hd->Neighbors();
+            for (auto neighbor : neighbors)
+            {
+                //只要不与前一个相同就继续循环
+                const DCEL::VertexProxy *v = G.Vertex(neighbor);
+                if (v->OnBoundary() && neighbor != boundary[count - 1])
+                {
+                    boundary.push_back(neighbor);
+                    ++count;
+                    break;
+                }
+            }
+            v_hd = G.Vertex(boundary[count]);
+        }
+        
+        Vector bx; bx.resize(input.Positions.size());
+        Vector by; by.resize(input.Positions.size());
+        memset(bx.data(), 0, input.Positions.size() * sizeof(double));
+        memset(by.data(), 0, input.Positions.size() * sizeof(double));
+        
+        double angle = M_PI * 2.0 / (boundary.size()-1);  //根据点的数量将圆等分
+        for (int i = 0; i < boundary.size() - 1; ++i)  //固定边界点的坐标在圆周上
+        {
+            output.TexCoords[boundary[i]].x = cosf(i * angle);
+            output.TexCoords[boundary[i]].y = sinf(i * angle);
+            bx[boundary[i]] = output.TexCoords[boundary[i]].x;
+            by[boundary[i]] = output.TexCoords[boundary[i]].y;
+        }
+        
+        Vector tx; tx.resize(input.Positions.size());
+        Vector ty; ty.resize(input.Positions.size());
+        
+        //生成系数矩阵
+        Matrix Weight = Matrix(input.Positions.size(), input.Positions.size());
+        for (int i = 0; i < input.Positions.size(); i ++)
+        {
+            Weight[i][i] = 1.0;
+            auto v = G.Vertex(i);
+            if (v->OnBoundary())
+            {
+                continue;
+                //Weight[i][i] = 1.0;
+            }
+            else
+            {
+                auto neighbors = v->Neighbors();
+                size_t neighborSize = neighbors.size();
+                //double neighborSize = int(neighbors.size());
+                double weight = -1.0 / neighborSize;
+                //Weight[i][i] = 1.0;
+                for (auto neighbor : neighbors)
+                {
+                    Weight[i][neighbor] = weight;
+                }
+            }
+        }
 
         // Solve equation via Gauss-Seidel Iterative Method.
-        for (int k = 0; k < numIterations; ++k) {
+        //for (int k = 0; k < numIterations; ++k)
+        {
             // your code here:
+            LinearSystem::GaussSeidelIteration(Weight, bx, tx);
+            LinearSystem::GaussSeidelIteration(Weight, by, ty);
+        }
+        
+        for (int i = 0; i < output.TexCoords.size(); ++i)  //固定边界点的坐标在圆周上
+        {
+            output.TexCoords[i].x = tx[i];
+            output.TexCoords[i].y = ty[i];
         }
     }
 
