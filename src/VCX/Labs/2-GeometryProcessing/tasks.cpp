@@ -222,8 +222,8 @@ namespace VCX::Labs::GeometryProcessing {
         double angle = M_PI * 2.0 / (boundary.size()-1);  //根据点的数量将圆等分
         for (int i = 0; i < boundary.size() - 1; ++i)  //固定边界点的坐标在圆周上
         {
-            output.TexCoords[boundary[i]].x = cosf(i * angle);
-            output.TexCoords[boundary[i]].y = sinf(i * angle);
+            output.TexCoords[boundary[i]].x = (cosf(i * angle) + 1.0f) * 0.5f;
+            output.TexCoords[boundary[i]].y = (sinf(i * angle) + 1.0f) * 0.5f;
             bx[boundary[i]] = output.TexCoords[boundary[i]].x;
             by[boundary[i]] = output.TexCoords[boundary[i]].y;
         }
