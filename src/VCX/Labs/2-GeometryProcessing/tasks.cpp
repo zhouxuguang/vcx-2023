@@ -293,6 +293,42 @@ namespace VCX::Labs::GeometryProcessing {
             [&G, &output] (DCEL::Triangle const * f) -> glm::mat4 {
                 glm::mat4 Q;
                 // your code here:
+                int idx1 = f->VertexIndex(0);
+                int idx2 = f->VertexIndex(1);
+                int idx3 = f->VertexIndex(2);
+                const glm::vec3 &point1 = output.Positions[idx1];
+                const glm::vec3 &point2 = output.Positions[idx2];
+                const glm::vec3 &point3 = output.Positions[idx3];
+                glm::vec3 vec1 = point2 - point1;
+                glm::vec3 vec2 = point3 - point1;
+                glm::vec3 normal = glm::normalize(glm::cross(vec1, vec2));
+                
+                //计算d
+                float x1 = point1.x; float y1 = point1.y; float z1 = point1.z;
+                float x2 = point2.x; float y2 = point2.y; float z2 = point2.z;
+                float x3 = point3.x; float y3 = point3.y; float z3 = point3.z;
+                float d = -(x1 * (y2*z3 - y3*z2) - y1 * (z2*x3 - z3*x2) + z1 * (x2*y3 - x3*y2));
+                
+                Q[0][0] = normal.x * normal.x;
+                Q[0][1] = normal.x * normal.y;
+                Q[0][2] = normal.x * normal.z;
+                Q[0][3] = normal.x * d;
+                
+                Q[1][0] = normal.x * normal.y;
+                Q[1][1] = normal.y * normal.y;
+                Q[1][2] = normal.y * normal.z;
+                Q[1][3] = normal.y * d;
+                
+                Q[2][0] = normal.x * normal.z;
+                Q[2][1] = normal.y * normal.z;
+                Q[2][2] = normal.z * normal.z;
+                Q[2][3] = normal.z * d;
+                
+                Q[3][0] = normal.x * d;
+                Q[3][1] = normal.y * d;
+                Q[3][2] = normal.z * d;
+                Q[3][3] = d * d;
+                
                 return Q;
             }
         };
@@ -313,7 +349,47 @@ namespace VCX::Labs::GeometryProcessing {
                 glm::mat4 const & Q
             ) -> ConstractionPair {
                 // your code here:
-                return {};
+                ConstractionPair constractionPair;
+                constractionPair.edge = edge;
+                
+                //计算矩阵q求解v的最有位置的矩阵
+                // 构造矩阵qi，求解最优位置
+                glm::mat4 Qi = Q;
+                Qi[3][0] = 0;
+                Qi[3][1] = 0;
+                Qi[3][2] = 0;
+                Qi[3][3] = 1;
+                
+                glm::vec4 targetPosition;
+                
+                float determinant = fabs(glm::determinant(Qi));
+                if (determinant < 0.001)
+                {
+                    targetPosition = glm::vec4((p1 + p2) * 0.5f, 1.0f);
+                }
+                else
+                {
+                    glm::vec4 value(0.0f, 0.0f, 0.0f, 1.0f);
+                    glm::mat4 inverseMat = glm::inverse(Qi);
+                    targetPosition = inverseMat * value;
+                }
+                
+                constractionPair.targetPosition = targetPosition;
+                
+                //计算代价
+                constractionPair.cost = Q[0][0] * targetPosition.x * targetPosition.x +
+                                    2 * Q[0][1] * targetPosition.x * targetPosition.y +
+                                    2 * Q[0][2] * targetPosition.x * targetPosition.z +
+                                    2 * Q[0][3] * targetPosition.x +
+                                    Q[1][1] * targetPosition.y * targetPosition.y +
+                                    2 * Q[1][2] * targetPosition.y * targetPosition.z +
+                                    2 * Q[1][3] * targetPosition.y +
+                                    Q[2][2] * targetPosition.z * targetPosition.z +
+                                    2 * Q[2][3] * targetPosition.z +
+                                    Q[3][3];
+                
+                
+                return constractionPair;
             }
         };
 
@@ -389,6 +465,8 @@ namespace VCX::Labs::GeometryProcessing {
             // So, we update the Q matrix.
             Qv[result.removed_faces[0].first] -= Qf[G.IndexOf(result.removed_faces[0].second)];
             Qv[result.removed_faces[1].first] -= Qf[G.IndexOf(result.removed_faces[1].second)];
+            
+            Qv[v1] = glm::mat4(0);
 
             // For the vertex v1, Q matrix should be recomputed.
             // And as the position of v1 changed, all the vertices which are on the ring of v1 should update their Q matrix as well.
@@ -400,6 +478,20 @@ namespace VCX::Labs::GeometryProcessing {
                 //        update Q matrix of each vertex on the ring (update $Qv$).
                 //     3. Update Q matrix of vertex v1 as well (update $Qv$).
                 //     4. Update $Qf$.
+                
+                DCEL::Triangle const *f = e->Face();
+                auto Q = UpdateQ(f);
+                auto oldQ = Qf[G.IndexOf(f)];
+                auto diffQ = Q - oldQ;
+                
+                int toIdx = e->To();
+                Qv[toIdx] += diffQ;
+                
+                int fromIdx = e->From();
+                
+                Qv[v1] += Q;
+                
+                Qf[G.IndexOf(f)]       = Q;
             }
 
             // Finally, as the Q matrix changed, we should update the relative $ConstractionPair$ in $pairs$.

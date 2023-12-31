@@ -153,7 +153,7 @@ void LinearSystem::GaussSeidelIteration(const Matrix &A, const Vector &B, Vector
             sum += diffVec[i] * diffVec[i];
         }
 
-        std::cout << "x1 = " << X[0] << " x2 = " << X[1] << " x3 = " << X[2] << std::endl;
+        //std::cout << "x1 = " << X[0] << " x2 = " << X[1] << " x3 = " << X[2] << std::endl;
 
         if (sum <= std::numeric_limits<double>::epsilon() || curIterCount >= iterCount)
         {
