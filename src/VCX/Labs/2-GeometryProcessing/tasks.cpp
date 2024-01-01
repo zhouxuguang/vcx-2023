@@ -1,4 +1,5 @@
 #include <unordered_map>
+#include <queue>
 
 #include <glm/gtc/matrix_inverse.hpp>
 #include <spdlog/spdlog.h>
@@ -307,7 +308,9 @@ namespace VCX::Labs::GeometryProcessing {
                 float x1 = point1.x; float y1 = point1.y; float z1 = point1.z;
                 float x2 = point2.x; float y2 = point2.y; float z2 = point2.z;
                 float x3 = point3.x; float y3 = point3.y; float z3 = point3.z;
-                float d = -(x1 * (y2*z3 - y3*z2) - y1 * (z2*x3 - z3*x2) + z1 * (x2*y3 - x3*y2));
+                //float d = -(x1 * (y2*z3 - y3*z2) - y1 * (z2*x3 - z3*x2) + z1 * (x2*y3 - x3*y2));
+                
+                float d = - (normal.x * x1 + normal.y * y1 + normal.z * z1);
                 
                 Q[0][0] = normal.x * normal.x;
                 Q[0][1] = normal.x * normal.y;
@@ -338,6 +341,11 @@ namespace VCX::Labs::GeometryProcessing {
             DCEL::HalfEdge const * edge;            // which edge to constract; if $edge == nullptr$, it means this pair is no longer valid
             glm::vec4              targetPosition;  // the targetPosition $v$ for vertex $edge->From()$ to move to
             float                  cost;            // the cost $v.T * Qbar * v$
+            
+            bool operator < (const ConstractionPair &other) const
+            {
+                return cost >= other.cost;
+            }
         };
 
         // Given an edge (v1->v2), the positions of its two endpoints (p1, p2) and the Q matrix (Q1+Q2),
@@ -371,7 +379,10 @@ namespace VCX::Labs::GeometryProcessing {
                 {
                     glm::vec4 value(0.0f, 0.0f, 0.0f, 1.0f);
                     glm::mat4 inverseMat = glm::inverse(Qi);
-                    targetPosition = inverseMat * value;
+                    targetPosition = glm::transpose(inverseMat) * value;   //注意，这里glm是列向量存储，但是我们数据组织是行向量，所以这里需要转置
+                    targetPosition /= targetPosition.w;
+                    
+                    //printf("target pos x = %f, y  = %f, z= %f\n", targetPosition.x, targetPosition.y, targetPosition.z);
                 }
                 
                 constractionPair.targetPosition = targetPosition;
@@ -388,6 +399,7 @@ namespace VCX::Labs::GeometryProcessing {
                                     2 * Q[2][3] * targetPosition.z +
                                     Q[3][3];
                 
+                //constractionPair.cost = glm::transpose(targetPosition) * Q * targetPosition;
                 
                 return constractionPair;
             }
@@ -398,9 +410,11 @@ namespace VCX::Labs::GeometryProcessing {
         // Qv:       $Qv[idx]$ is the Q matrix of vertex with index $idx$
         // Qf:       $Qf[idx]$ is the Q matrix of face with index $idx$
         std::unordered_map<DCEL::EdgeIdx, std::size_t> pair_map; 
-        std::vector<ConstractionPair>                  pairs; 
+        //std::vector<ConstractionPair>                  pairs;
         std::vector<glm::mat4>                         Qv(G.NumOfVertices(), glm::mat4(0));
         std::vector<glm::mat4>                         Qf(G.NumOfFaces(),    glm::mat4(0));
+        
+        std::priority_queue<ConstractionPair> pairCostQueue;
 
         // Initially, we compute Q matrix for each faces and it accumulates at each vertex.
         for (auto f : G.Faces()) {
@@ -412,7 +426,7 @@ namespace VCX::Labs::GeometryProcessing {
         }
 
         pair_map.reserve(G.NumOfFaces() * 3);
-        pairs.reserve(G.NumOfFaces() * 3 / 2);
+        //pairCostQueue.reserve(G.NumOfFaces() * 3 / 2);
 
         // Initially, we make pairs from all the constractable edges.
         for (auto e : G.Edges()) {
@@ -420,53 +434,66 @@ namespace VCX::Labs::GeometryProcessing {
             auto v1                            = e->From();
             auto v2                            = e->To();
             auto pair                          = MakePair(e, input.Positions[v1], input.Positions[v2], Qv[v1] + Qv[v2]);
-            pair_map[G.IndexOf(e)]             = pairs.size();
-            pair_map[G.IndexOf(e->TwinEdge())] = pairs.size();
-            pairs.emplace_back(pair);
+            pair_map[G.IndexOf(e)]             = pairCostQueue.size();
+            pair_map[G.IndexOf(e->TwinEdge())] = pairCostQueue.size();
+            pairCostQueue.push(pair);
         }
 
         // Loop until the number of vertices is less than $simplification_ratio * initial_size$.
-        while (G.NumOfVertices() > simplification_ratio * Qv.size()) {
+        while (G.NumOfVertices() > simplification_ratio * input.Positions.size())
+        {
             // Find the constractable pair with minimal cost.
-            std::size_t min_idx = ~0;
-            for (std::size_t i = 1; i < pairs.size(); ++i) {
-                if (! pairs[i].edge) continue;
-                if (!~min_idx || pairs[i].cost < pairs[min_idx].cost) {
-                    if (G.IsConstractable(pairs[i].edge)) min_idx = i;
-                    else pairs[i].edge = nullptr;
-                }
-            }
-            if (!~min_idx) break;
-
+            const ConstractionPair & top = pairCostQueue.top();
+            pairCostQueue.pop();
+            
+            
             // top:    the constractable pair with minimal cost
             // v1:     the reserved vertex
             // v2:     the removed vertex
             // result: the constract result
             // ring:   the edge ring of vertex v1
-            ConstractionPair & top    = pairs[min_idx];
-            auto               v1     = top.edge->From();
-            auto               v2     = top.edge->To();
-            auto               result = G.Constract(top.edge);
-            auto               ring   = G.Vertex(v1)->Ring();
+            DCEL::ConstractionResult result;
+            
+            auto v1 = top.edge->From();
+            auto v2 = top.edge->To();
+            
+            if (!G.Vertex(v1) || !G.Vertex(v2))
+            {
+                continue;
+            }
+            
+            if (G.IsConstractable(top.edge))
+            {
+                result = G.Constract(top.edge);
+            }
 
-            top.edge             = nullptr;            // The constraction has already been done, so the pair is no longer valid. Mark it as invalid.
+            else if(top.edge->TwinEdgeOr(nullptr) && G.IsConstractable(top.edge->TwinEdgeOr(nullptr)))
+            {
+                result = G.Constract(top.edge->TwinEdgeOr(nullptr));
+                v1 = top.edge->To();
+                v2 = top.edge->From();
+            }
+            else
+            {
+                continue;
+            }
+            
+            auto ring = G.Vertex(v1)->Ring();
             output.Positions[v1] = top.targetPosition; // Update the positions.
 
             // We do something to repair $pair_map$ and $pairs$ because some edges and vertices no longer exist.
-            for (int i = 0; i < 2; ++i) {
-                DCEL::EdgeIdx removed           = G.IndexOf(result.removed_edges[i].first);
-                DCEL::EdgeIdx collapsed         = G.IndexOf(result.collapsed_edges[i].second);
-                pairs[pair_map[removed]].edge   = result.collapsed_edges[i].first;
-                pairs[pair_map[collapsed]].edge = nullptr;
-                pair_map[collapsed]             = pair_map[G.IndexOf(result.collapsed_edges[i].first)];
-            }
+//            for (int i = 0; i < 2; ++i) {
+//                DCEL::EdgeIdx removed           = G.IndexOf(result.removed_edges[i].first);
+//                DCEL::EdgeIdx collapsed         = G.IndexOf(result.collapsed_edges[i].second);
+//                pairs[pair_map[removed]].edge   = result.collapsed_edges[i].first;
+//                pairs[pair_map[collapsed]].edge = nullptr;
+//                pair_map[collapsed]             = pair_map[G.IndexOf(result.collapsed_edges[i].first)];
+//            }
 
             // For the two wing vertices, each of them lose one incident face.
             // So, we update the Q matrix.
-            Qv[result.removed_faces[0].first] -= Qf[G.IndexOf(result.removed_faces[0].second)];
-            Qv[result.removed_faces[1].first] -= Qf[G.IndexOf(result.removed_faces[1].second)];
-            
-            Qv[v1] = glm::mat4(0);
+//            Qv[result.removed_faces[0].first] -= Qf[G.IndexOf(result.removed_faces[0].second)];
+//            Qv[result.removed_faces[1].first] -= Qf[G.IndexOf(result.removed_faces[1].second)];
 
             // For the vertex v1, Q matrix should be recomputed.
             // And as the position of v1 changed, all the vertices which are on the ring of v1 should update their Q matrix as well.
@@ -491,12 +518,38 @@ namespace VCX::Labs::GeometryProcessing {
                 
                 Qv[v1] += Q;
                 
-                Qf[G.IndexOf(f)]       = Q;
+                Qf[G.IndexOf(f)] = Q;
             }
 
             // Finally, as the Q matrix changed, we should update the relative $ConstractionPair$ in $pairs$.
             // Any pair with the Q matrix of its endpoints changed, should be remade by $MakePair$.
             // your code here:
+            for (auto e : ring) {
+                //if (! G.IsConstractable(e)) continue;
+                auto v1                            = e->From();
+                auto v2                            = e->To();
+                auto pair                          = MakePair(e, output.Positions[v1], output.Positions[v2], Qv[v1] + Qv[v2]);
+                
+                pairCostQueue.push(pair);
+                
+//                auto iter = pair_map.find(G.IndexOf(e));
+//                if (iter == pair_map.end()) 
+//                {
+//                    iter = pair_map.find(G.IndexOf(e->TwinEdge()));
+//                }
+//                
+//                if (iter != pair_map.end())
+//                {
+//                    int pairIndex = iter->second;
+//                    pairs[pairIndex] = pair;
+//                }
+//                else
+//                {
+//                    pair_map[G.IndexOf(e)] = pairs.size();
+//                    pair_map[G.IndexOf(e->TwinEdge())] = pairs.size();
+//                    pairs.emplace_back(pair);
+//                }
+            }
 
         }
 
