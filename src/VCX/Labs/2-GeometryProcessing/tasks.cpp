@@ -494,9 +494,20 @@ namespace VCX::Labs::GeometryProcessing {
             // So, we update the Q matrix.
 //            Qv[result.removed_faces[0].first] -= Qf[G.IndexOf(result.removed_faces[0].second)];
 //            Qv[result.removed_faces[1].first] -= Qf[G.IndexOf(result.removed_faces[1].second)];
+            
+            auto neighbors = G.Vertex(v1)->Neighbors();
+            assert(neighbors.size() == ring.size());
+            
+            printf("begin vertex \n");
+            for (auto e : neighbors)
+            {
+                //printf("neighbors = %d\n", e);
+            }
+            printf("end vertex \n");
 
             // For the vertex v1, Q matrix should be recomputed.
             // And as the position of v1 changed, all the vertices which are on the ring of v1 should update their Q matrix as well.
+            printf("begin edge \n");
             Qv[v1] = glm::mat4(0);
             for (auto e : ring) {
                 // your code here:
@@ -508,18 +519,28 @@ namespace VCX::Labs::GeometryProcessing {
                 
                 DCEL::Triangle const *f = e->Face();
                 auto Q = UpdateQ(f);
+                
                 auto oldQ = Qf[G.IndexOf(f)];
-                auto diffQ = Q - oldQ;
+                //auto diffQ = Q - oldQ;
                 
                 int toIdx = e->To();
-                Qv[toIdx] += diffQ;
-                
-                int fromIdx = e->From();
+                //printf("toIdx = %d\n", toIdx);
+                //Qv[toIdx] += diffQ;
                 
                 Qv[v1] += Q;
-                
                 Qf[G.IndexOf(f)] = Q;
+                
+                //遍历每个末端顶点关联的面
+                Qv[toIdx] = glm::mat4(0);
+                auto faces = G.Vertex(toIdx)->Faces();
+                for (auto face : faces)
+                {
+                    auto Q = UpdateQ(face);
+                    Qf[G.IndexOf(face)] = Q;
+                    Qv[toIdx] += Q;
+                }
             }
+            printf("end edge \n");
 
             // Finally, as the Q matrix changed, we should update the relative $ConstractionPair$ in $pairs$.
             // Any pair with the Q matrix of its endpoints changed, should be remade by $MakePair$.
