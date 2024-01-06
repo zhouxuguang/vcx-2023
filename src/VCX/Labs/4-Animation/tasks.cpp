@@ -8,23 +8,76 @@
 
 
 namespace VCX::Labs::Animation {
-    void ForwardKinematics(IKSystem & ik, int StartIndex) {
-        if (StartIndex == 0) {
+    void ForwardKinematics(IKSystem & ik, int StartIndex) 
+    {
+        if (StartIndex == 0)
+        {
             ik.JointGlobalRotation[0] = ik.JointLocalRotation[0];
             ik.JointGlobalPosition[0] = ik.JointLocalOffset[0];
             StartIndex                = 1;
         }
         
-        for (int i = StartIndex; i < ik.JointLocalOffset.size(); i++) {
-            // your code here: forward kinematics, update JointGlobalPosition and JointGlobalRotation
+        for (int i = StartIndex; i < ik.JointLocalOffset.size(); i++) 
+        {
+            //先计算缩放，然后计算旋转，最后计算平移
+            ik.JointGlobalRotation[i] = ik.JointLocalRotation[i] * ik.JointGlobalRotation[i-1];
+
+            glm::vec3 position = ik.JointGlobalRotation[i-1] * ik.JointLocalOffset[i];
+            ik.JointGlobalPosition[i] = ik.JointGlobalPosition[i-1] + position;
         }
     }
 
-    void InverseKinematicsCCD(IKSystem & ik, const glm::vec3 & EndPosition, int maxCCDIKIteration, float eps) {
+    void InverseKinematicsCCD(IKSystem & ik, const glm::vec3 & EndPosition, int maxCCDIKIteration, float eps) 
+    {
         ForwardKinematics(ik, 0);
+        
+        int size = ik.NumJoints();
+        if (size == 0) 
+        {
+            return;
+        }
+        int last = size - 1;
+        glm::vec3 goal = EndPosition;
+        
         // These functions will be useful: glm::normalize, glm::rotation, glm::quat * glm::quat
         for (int CCDIKIteration = 0; CCDIKIteration < maxCCDIKIteration && glm::l2Norm(ik.EndEffectorPosition() - EndPosition) > eps; CCDIKIteration++) {
-            // your code here: ccd ik
+            
+            //每一步迭代就是将当前节点与末端点之间的连线方向旋转到当前节点与目标连线的方向，从倒数第二个节点开始旋转，因为最后一个节点旋转不产生影响
+            for (int j = (int)size - 2; j >= 0; --j)
+            {
+                //获得末端节点的世界坐标位置
+                glm::vec3& effector = ik.JointGlobalPosition[last];
+
+                //获得当前节点的世界变换
+                glm::vec3 position = ik.JointGlobalPosition[j];
+                glm::quat rotation = ik.JointGlobalRotation[j];
+
+                glm::vec3 toEffector = glm::normalize(effector - position);    //由当前节点指向末端节点
+                glm::vec3 toGoal = glm::normalize(goal - position);            //由当前节点指向目标节点
+
+                //计算从toEffector方向到toGoal方向的旋转四元数
+                glm::quat effectorToGoal;
+                if (glm::length2(toGoal) > 0.00001f) 
+                {
+                    effectorToGoal = glm::rotation(toEffector, toGoal);
+                }
+
+                //更新当前节点的局部旋转
+                glm::quat worldRotated = rotation * effectorToGoal;
+                glm::quat localRotate = worldRotated * glm::inverse(rotation);
+                ik.JointLocalRotation[j] = localRotate * ik.JointLocalRotation[j];
+                
+                //更新当前节点到末端节点的全局位置和旋转
+                ForwardKinematics(ik, j);
+
+                //判断末端节点和目标位置是否足够近
+                effector = ik.JointGlobalPosition[last];
+                if (glm::length2(goal - effector) < eps)
+                {
+                    printf("CCD IK的迭代次数 = %d\n", CCDIKIteration + 1);
+                    return;
+                }
+            }
         }
     }
 
