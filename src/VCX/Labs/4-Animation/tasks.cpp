@@ -7,8 +7,9 @@
 #include "CustomFunc.inl"
 
 
-namespace VCX::Labs::Animation {
-    void ForwardKinematics(IKSystem & ik, int StartIndex) 
+namespace VCX::Labs::Animation 
+{
+    void ForwardKinematics(IKSystem & ik, int StartIndex)
     {
         if (StartIndex == 0)
         {
@@ -81,38 +82,115 @@ namespace VCX::Labs::Animation {
         }
     }
 
-    void InverseKinematicsFABR(IKSystem & ik, const glm::vec3 & EndPosition, int maxFABRIKIteration, float eps) {
-        ForwardKinematics(ik, 0);
+void WorldToIKChain(IKSystem & ik, const std::vector<glm::vec3>& worldPosition)
+{
+    int size = ik.NumJoints();
+    if (size == 0)
+    {
+        return;
+    }
+    
+    typedef glm::vec<3, double, glm::defaultp> vec3d;
+    typedef glm::qua<double, glm::defaultp> quatd;
+
+    for (int i = 0; i < size - 1; ++i)
+    {
+        vec3d position = ik.JointGlobalPosition[i];
+        quatd rotation = ik.JointGlobalRotation[i];
+
+        vec3d toNext = glm::normalize(vec3d(ik.JointGlobalPosition[i + 1]) - position);
+        toNext = glm::normalize(glm::inverse(rotation) * toNext);
+
+        vec3d toDesired = glm::normalize(vec3d(worldPosition[i + 1]) - position);
+        toDesired = glm::normalize(glm::inverse(rotation) * toDesired);
+
+        quatd delta = glm::rotation(toNext, toDesired);
+        ik.JointLocalRotation[i] = delta * quatd(ik.JointLocalRotation[i]);
+    }
+}
+
+    void InverseKinematicsFABR(IKSystem & ik, const glm::vec3 & EndPosition, int maxFABRIKIteration, float eps) 
+    {
         int nJoints = ik.NumJoints();
-        std::vector<glm::vec3> backward_positions(nJoints, glm::vec3(0, 0, 0)), forward_positions(nJoints, glm::vec3(0, 0, 0));
-        for (int IKIteration = 0; IKIteration < maxFABRIKIteration && glm::l2Norm(ik.EndEffectorPosition() - EndPosition) > eps; IKIteration++) {
-            // task: fabr ik
-            // backward update
-            glm::vec3 next_position         = EndPosition;
-            backward_positions[nJoints - 1] = EndPosition;
-
-            for (int i = nJoints - 2; i >= 0; i--) {
-                // your code here
-            }
-
-            // forward update
-            glm::vec3 now_position = ik.JointGlobalPosition[0];
-            forward_positions[0] = ik.JointGlobalPosition[0];
-            for (int i = 0; i < nJoints - 1; i++) {
-                // your code here
-            }
-            ik.JointGlobalPosition = forward_positions; // copy forward positions to joint_positions
+        if (0 == nJoints)
+        {
+            return;
         }
+        
+        ForwardKinematics(ik, 0);
+        
+        glm::vec3 goal = EndPosition;
+        glm::vec3 base = ik.JointGlobalPosition[0];
+        
+        //初始化存储中间状态的全局位置向量
+        std::vector<glm::vec3> global_positions(nJoints);
+        memcpy(global_positions.data(), ik.JointGlobalPosition.data(), sizeof(glm::vec3) * nJoints);
+        
+        int iterCount = 0;
+        
+        for (int IKIteration = 0; IKIteration < maxFABRIKIteration; IKIteration++)
+        {
+            // 如果末端节点和目标点非常接近，推出循环
+            if (glm::l2Norm(global_positions[nJoints - 1] - goal) <= eps)
+            {
+                break;
+            }
+            
+            // backward update，将末端节点拉到目标点的位置
+            global_positions[nJoints - 1] = goal;
+            for (int i = nJoints - 2; i >= 0; i--) 
+            {
+                //从子节点指向父节点的方向
+                glm::vec3 direction = glm::normalize(global_positions[i] - global_positions[i + 1]);
+                glm::vec3 offset = direction * ik.JointOffsetLength[i + 1];
+                
+                //将当前节点往子节点方向拉
+                global_positions[i] = global_positions[i + 1] + offset;
+            }
 
-        // Compute joint rotation by position here.
-        for (int i = 0; i < nJoints - 1; i++) {
+            // forward update，将起始节点拉到本身节点的位置
+            global_positions[0] = base;
+            for (int i = 1; i < nJoints; i++)
+            {
+                //从父节点向子节点的方向
+                glm::vec3 direction = glm::normalize(global_positions[i] - global_positions[i - 1]);
+                
+                //沿着从父节点向子节点的方向的偏移向量
+                glm::vec3 offset = direction * ik.JointOffsetLength[i];
+                
+                //父节点+偏移向量 即更新其节点的位置
+                global_positions[i] = global_positions[i - 1] + offset;
+            }
+            
+            iterCount ++;
+        }
+        
+        printf("FABR IK 的迭代次数 = %d\n", iterCount);
+        
+        ik.JointGlobalPosition = global_positions;
+
+        // 根据全局位置计算关节的旋转
+        for (int i = 0; i < nJoints - 1; i++)
+        {
             ik.JointGlobalRotation[i] = glm::rotation(glm::normalize(ik.JointLocalOffset[i + 1]), glm::normalize(ik.JointGlobalPosition[i + 1] - ik.JointGlobalPosition[i]));
         }
+        
+        //计算每个关节的局部旋转
         ik.JointLocalRotation[0] = ik.JointGlobalRotation[0];
-        for (int i = 1; i < nJoints - 1; i++) {
+        for (int i = 1; i < nJoints - 1; i++) 
+        {
             ik.JointLocalRotation[i] = glm::inverse(ik.JointGlobalRotation[i - 1]) * ik.JointGlobalRotation[i];
         }
-        ForwardKinematics(ik, 0);
+        
+//        for (int i = 0; i < nJoints; i ++)
+//        {
+//            printf("%d ik point x = %f, y = %f, z = %f,  global point x = %f, y = %f, z= %f\n", i, 
+//                   ik.JointGlobalPosition[i].x, ik.JointGlobalPosition[i].y, ik.JointGlobalPosition[i].z,
+//                   global_positions[i].x, global_positions[i].y, global_positions[i].z);
+//        }
+//        
+//        printf("target point x = %f, y = %f, z = %f\n",
+//               goal.x, goal.y, goal.z);
     }
 
     IKSystem::Vec3ArrPtr IKSystem::BuildCustomTargetPosition() {
