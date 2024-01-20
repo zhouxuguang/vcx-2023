@@ -13,7 +13,8 @@ namespace VCX::Labs::Animation {
 
     enum IKType {
         CCD_IK = 0,
-        FABR_IK = 1
+        FABR_IK = 1,
+        JACOBIAN_IK = 2
     };
 
     class BoxRenderer {
