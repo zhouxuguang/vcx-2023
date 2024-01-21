@@ -153,7 +153,7 @@ namespace VCX::Labs::Animation {
             }
             else if (ik_type == IKType::JACOBIAN_IK)
             {
-                InverseKinematicsJacobianTranspose(ik_system, target, 100, 1e-4f);
+                InverseKinematicsJacobianTranspose(ik_system, target, 1000, 1e-4f);
             }
             ik_system.EndPositionHistory[index] = ik_system.EndEffectorPosition();
             BuildByJointPosition(ik_system.JointGlobalPosition);
