@@ -232,22 +232,18 @@ void WorldToIKChain(IKSystem & ik, const std::vector<glm::vec3>& worldPosition)
                 }
                 const glm::quat& parentRotate = ik.JointGlobalRotation[parentIndex];
                 
-                // for test
-                glm::quat rotate = glm::angleAxis(1.0f, glm::vec3(1.0, 0.0, 0.0));
-                glm::vec3 eulerAngles0 = glm::eulerAngles(rotate);
-                
                 // 2 获得当前节点的局部旋转，并转换为XYZ的转角顺序的欧拉角
                 const glm::quat& localRatate = ik.JointLocalRotation[i];
                 glm::vec3 eulerAngles = glm::eulerAngles(localRatate);
                 
                 glm::quat rotateX = glm::angleAxis(eulerAngles.x, glm::vec3(1.0, 0.0, 0.0));
                 
-                // 3 计算当前坐标的朝向
+                // 3 计算当前节点在全局空间中的朝向
                 glm::vec3 axisX = glm::normalize(parentRotate * glm::vec3(1.0, 0.0, 0.0));
                 glm::vec3 axisY = glm::normalize(parentRotate * rotateX * glm::vec3(0.0, 1.0, 0.0));
                 
                 glm::quat rotateY = glm::angleAxis(eulerAngles.y, glm::vec3(0.0, 1.0, 0.0));
-                glm::vec3 axisZ = glm::normalize(parentRotate * rotateY * rotateX * glm::vec3(0.0, 0.0, 1.0));
+                glm::vec3 axisZ = glm::normalize(parentRotate * rotateX * rotateY * glm::vec3(0.0, 0.0, 1.0));
                 
                 //计算当前节点到末端节点连线的向量
                 glm::vec3 ri = ik.EndEffectorPosition() - ik.JointGlobalPosition[i];
@@ -272,6 +268,9 @@ void WorldToIKChain(IKSystem & ik, const std::vector<glm::vec3>& worldPosition)
             // step3 计算角度增量
             deltaTheta = jacobianMatrix * deltaX;
             
+            printf("\ndelta theta \n");
+            std::cout << deltaTheta;
+            
             //应用上当前的角度增量
             for (int i = 0; i < ik.NumJoints(); i ++)
             {
@@ -279,22 +278,45 @@ void WorldToIKChain(IKSystem & ik, const std::vector<glm::vec3>& worldPosition)
                 eularAngle.x = deltaTheta(i * 3, 0);
                 eularAngle.y = deltaTheta(i * 3 + 1, 0);
                 eularAngle.z = deltaTheta(i * 3 + 2, 0);
+                
+                glm::vec3 currentAngle = glm::eulerAngles(ik.JointLocalRotation[i]);
+                currentAngle -= eularAngle * 0.8f;
+                
+                //printf("%d eularAngle x = %f, y = %f, z= %f\n", i, eularAngle.x, eularAngle.y, eularAngle.z);
+                
                 glm::quat theta = glm::quat(eularAngle);
                 
-                ik.JointLocalRotation[i] -= theta * 0.8f;
+                // for test
+                glm::quat deltaTheta = glm::normalize(theta * 0.8f);
+                //printf("%d theta x = %f, y = %f, z= %f, w = %f\n", i, deltaTheta.x, deltaTheta.y, deltaTheta.z, deltaTheta.w);
+                
+                ik.JointLocalRotation[i] = glm::quat(currentAngle);
             }
             
             ForwardKinematics(ik, 0);
         }
         
-        for (int i = 0; i < ik.NumJoints(); i ++)
-        {
-            printf("%d ik point x = %f, y = %f, z = %f\n", i,
-                   ik.JointGlobalPosition[i].x, ik.JointGlobalPosition[i].y, ik.JointGlobalPosition[i].z);
-        }
-
-        printf("target point x = %f, y = %f, z = %f\n",
-               EndPosition.x, EndPosition.y, EndPosition.z);
+        // 根据全局位置计算关节的旋转
+//        for (int i = 0; i < ik.NumJoints() - 1; i++)
+//        {
+//            ik.JointGlobalRotation[i] = glm::rotation(glm::normalize(ik.JointLocalOffset[i + 1]), glm::normalize(ik.JointGlobalPosition[i + 1] - ik.JointGlobalPosition[i]));
+//        }
+//        
+//        //计算每个关节的局部旋转
+//        ik.JointLocalRotation[0] = ik.JointGlobalRotation[0];
+//        for (int i = 1; i < ik.NumJoints() - 1; i++)
+//        {
+//            ik.JointLocalRotation[i] = glm::inverse(ik.JointGlobalRotation[i - 1]) * ik.JointGlobalRotation[i];
+//        }
+        
+//        for (int i = 0; i < ik.NumJoints(); i ++)
+//        {
+//            printf("%d ik point x = %f, y = %f, z = %f\n", i,
+//                   ik.JointGlobalPosition[i].x, ik.JointGlobalPosition[i].y, ik.JointGlobalPosition[i].z);
+//        }
+//
+//        printf("target point x = %f, y = %f, z = %f\n",
+//               EndPosition.x, EndPosition.y, EndPosition.z);
         
         printf("jacobian 迭代次数 = %d\n", iteration);
     }
