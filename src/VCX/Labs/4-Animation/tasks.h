@@ -9,6 +9,7 @@ namespace VCX::Labs::Animation {
     void InverseKinematicsCCD(IKSystem & ik, const glm::vec3 & EndPosition, int maxCCDIKIteration, float eps);
     void InverseKinematicsFABR(IKSystem & ik, const glm::vec3 & EndPosition, int maxFABRIKIteration, float eps);
     void InverseKinematicsJacobianTranspose(IKSystem & ik, const glm::vec3 & EndPosition, int maxIteration, float eps);
+    void InverseKinematicsJacobianInverse(IKSystem & ik, const glm::vec3 & EndPosition, int maxIteration, float eps);
     
     // lab4 mass spring system
     void AdvanceMassSpringSystem(MassSpringSystem &, float const);

@@ -100,10 +100,10 @@ namespace VCX::Labs::Animation {
     }
 
     void CaseInverseKinematics::OnSetupPropsUI() {
-            const char * ik_items[] = { "ccd_ik", "fabr_ik", "jacobian_transpose"};
+            const char * ik_items[] = { "ccd_ik", "fabr_ik", "jacobian_transpose", "jacobian_inverse"};
             if (ImGui::BeginCombo("Algorithm", ik_items[ik_type]))
             {
-                for (int i = 0; i < 3; i++) {
+                for (int i = 0; i < 4; i++) {
                     bool selected = i == ik_type;
                     if (ImGui::Selectable(ik_items[i], selected)) {
                         if (! selected) ik_type = i;
@@ -153,7 +153,11 @@ namespace VCX::Labs::Animation {
             }
             else if (ik_type == IKType::JACOBIAN_IK)
             {
-                InverseKinematicsJacobianTranspose(ik_system, target, 1000, 1e-4f);
+                InverseKinematicsJacobianTranspose(ik_system, target, 10000, 1e-4f);
+            }
+            else if (ik_type == IKType::JACOBIAN_INVERSE_IK)
+            {
+                InverseKinematicsJacobianInverse(ik_system, target, 10000, 1e-4f);
             }
             ik_system.EndPositionHistory[index] = ik_system.EndEffectorPosition();
             BuildByJointPosition(ik_system.JointGlobalPosition);

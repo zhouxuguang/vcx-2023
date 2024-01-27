@@ -309,6 +309,124 @@ void WorldToIKChain(IKSystem & ik, const std::vector<glm::vec3>& worldPosition)
         printf("jacobian 迭代次数 = %d\n", iteration);
     }
 
+    void InverseKinematicsJacobianInverse(IKSystem & ik, const glm::vec3 & EndPosition, int maxIteration, float eps)
+    {
+        ForwardKinematics(ik, 0);
+        
+        int size = ik.NumJoints();
+        if (size == 0)
+        {
+            return;
+        }
+        
+        int iteration = 0;
+        // These functions will be useful: glm::normalize, glm::rotation, glm::quat * glm::quat
+        for (; iteration < maxIteration && glm::l2Norm(ik.EndEffectorPosition() - EndPosition) > eps; iteration++)
+        {
+            //step 1 计算出delta x，即当前末端点减去目标点的向量
+            glm::vec3 delta = ik.EndEffectorPosition() - EndPosition;
+            
+            Eigen::MatrixXf deltaX(3, 1);
+            deltaX(0, 0) = delta.x;
+            deltaX(1, 0) = delta.y;
+            deltaX(2, 0) = delta.z;
+            
+            //step 2: 计算雅可比矩阵
+            
+            Eigen::MatrixXf jacobianMatrix(3, 3 * ik.NumJoints());
+            Eigen::MatrixXf deltaTheta(3 * ik.NumJoints(), 1);
+            
+            for (int i = 0; i < ik.NumJoints(); i ++)
+            {
+                // 1 获得父亲关节的全局旋转
+                int parentIndex = i - 1;
+                if (0 == i)
+                {
+                    parentIndex = 0;
+                }
+                const glm::quat& parentRotate = ik.JointGlobalRotation[parentIndex];
+                
+                // 2 获得当前节点的局部旋转，并转换为XYZ的转角顺序的欧拉角
+                const glm::quat& localRatate = ik.JointLocalRotation[i];
+                glm::vec3 eulerAngles = glm::eulerAngles(localRatate);
+                
+                // 3 计算当前节点在全局空间中的朝向
+                glm::quat rotateX = glm::angleAxis(eulerAngles.x, glm::vec3(1.0, 0.0, 0.0));
+                glm::vec3 axisX = glm::normalize(parentRotate * glm::vec3(1.0, 0.0, 0.0));
+                glm::vec3 axisY = glm::normalize(parentRotate * rotateX * glm::vec3(0.0, 1.0, 0.0));
+                
+                glm::quat rotateY = glm::angleAxis(eulerAngles.y, glm::vec3(0.0, 1.0, 0.0));
+                glm::vec3 axisZ = glm::normalize(parentRotate * rotateX * rotateY * glm::vec3(0.0, 0.0, 1.0));
+                
+                //计算当前节点到末端节点连线的向量
+                glm::vec3 ri = ik.EndEffectorPosition() - ik.JointGlobalPosition[i];
+                
+                glm::vec3 dx = (glm::cross(axisX, ri));
+                glm::vec3 dy = (glm::cross(axisY, ri));
+                glm::vec3 dz = (glm::cross(axisZ, ri));
+                
+                jacobianMatrix(0, i * 3) = dx.x;
+                jacobianMatrix(1, i * 3) = dx.y;
+                jacobianMatrix(2, i * 3) = dx.z;
+                
+                jacobianMatrix(0, i * 3 + 1) = dy.x;
+                jacobianMatrix(1, i * 3 + 1) = dy.y;
+                jacobianMatrix(2, i * 3 + 1) = dy.z;
+                
+                jacobianMatrix(0, i * 3 + 2) = dz.x;
+                jacobianMatrix(1, i * 3 + 2) = dz.y;
+                jacobianMatrix(2, i * 3 + 2) = dz.z;
+            }
+            
+            // step3 计算角度增量和步长
+            //求雅可比矩阵的伪逆
+            Eigen::MatrixXf jacobianTransposeMatrix = jacobianMatrix.transpose();
+            Eigen::MatrixXf pseudoInverse = jacobianMatrix.completeOrthogonalDecomposition().pseudoInverse();;
+            deltaTheta = pseudoInverse * deltaX;
+            
+//            Eigen::IOFormat CleanFmt(3, 0, ", ", "\n", "[", "]");
+//            
+//            std::cout << (jacobianMatrix * jacobianTransposeMatrix).inverse().format(CleanFmt) << std::endl;
+//            std::cout << "下一次迭代" << std::endl;
+            
+            
+//            Eigen::Vector3f vec1 = jacobianMatrix * jacobianTransposeMatrix * deltaX;
+//            glm::vec3 vecTemp(vec1.x(), vec1.y(), vec1.z());
+//            
+//            // 计算stepsize
+//            float beta = glm::dot(delta, vecTemp) / glm::dot(vecTemp, vecTemp);
+            
+            float beta = 1.0;
+            
+            //step4 应用上当前的角度增量
+            for (int i = 0; i < ik.NumJoints(); i ++)
+            {
+                glm::vec3 eularAngle;
+                eularAngle.x = deltaTheta(i * 3, 0);
+                eularAngle.y = deltaTheta(i * 3 + 1, 0);
+                eularAngle.z = deltaTheta(i * 3 + 2, 0);
+                
+                glm::vec3 currentAngle = glm::eulerAngles(ik.JointLocalRotation[i]);
+                currentAngle -= eularAngle * beta;
+                
+                ik.JointLocalRotation[i] = glm::quat(currentAngle);
+            }
+            
+            ForwardKinematics(ik, 0);
+        }
+        
+//        for (int i = 0; i < ik.NumJoints(); i ++)
+//        {
+//            printf("%d ik point x = %f, y = %f, z = %f\n", i,
+//                   ik.JointGlobalPosition[i].x, ik.JointGlobalPosition[i].y, ik.JointGlobalPosition[i].z);
+//        }
+//
+//        printf("target point x = %f, y = %f, z = %f\n",
+//               EndPosition.x, EndPosition.y, EndPosition.z);
+        
+        printf("jacobian inverse 迭代次数 = %d\n", iteration);
+    }
+
     IKSystem::Vec3ArrPtr IKSystem::BuildCustomTargetPosition() {
         // get function from https://www.wolframalpha.com/input/?i=Albert+Einstein+curve
         int nums = 5000;
