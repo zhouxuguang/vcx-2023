@@ -472,7 +472,7 @@ void WorldToIKChain(IKSystem & ik, const std::vector<glm::vec3>& worldPosition)
     void AdvanceMassSpringSystem(MassSpringSystem & system, float const dt) {
         // your code here: rewrite following code
         int const steps = 1000;
-        float const ddt = dt / steps; 
+        float const ddt = dt / steps;
         for (std::size_t s = 0; s < steps; s++) {
             std::vector<glm::vec3> forces(system.Positions.size(), glm::vec3(0));
             for (auto const spring : system.Springs) {
