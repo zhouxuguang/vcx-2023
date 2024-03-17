@@ -469,6 +469,7 @@ void WorldToIKChain(IKSystem & ik, const std::vector<glm::vec3>& worldPosition)
         return solver.solve(b);
     }
 
+#if 0
     void AdvanceMassSpringSystem(MassSpringSystem & system, float const dt) {
         // your code here: rewrite following code
         int const steps = 1000;
@@ -481,15 +482,120 @@ void WorldToIKChain(IKSystem & ik, const std::vector<glm::vec3>& worldPosition)
                 glm::vec3 const x01 = system.Positions[p1] - system.Positions[p0];
                 glm::vec3 const v01 = system.Velocities[p1] - system.Velocities[p0];
                 glm::vec3 const e01 = glm::normalize(x01);
-                glm::vec3 f = (system.Stiffness * (glm::length(x01) - spring.RestLength) + system.Damping * glm::dot(v01, e01)) * e01;
+                glm::vec3 f = (system.Stiffness * (glm::length(x01) - spring.RestLength) + system.Damping * glm::dot(v01, e01)) * e01;  //计算弹簧力
                 forces[p0] += f;
                 forces[p1] -= f;
             }
             for (std::size_t i = 0; i < system.Positions.size(); i++) {
                 if (system.Fixed[i]) continue;
-                system.Velocities[i] += (glm::vec3(0, -system.Gravity, 0) + forces[i] / system.Mass) * ddt;
+                system.Velocities[i] += (glm::vec3(0, -system.Gravity, 0) + forces[i] / system.Mass) * ddt;  //速度更新
                 system.Positions[i] += system.Velocities[i] * ddt;
             }
         }
     }
+
+#else
+
+void insertToTrips(std::vector<Eigen::Triplet<float>> &sparseMatTrips, const Eigen::MatrixXf& deritiveMatrix, int row, int col)
+{
+    int startRow = row * 3;
+    int startCol = col * 3;
+    for (int i = 0; i < 3; i ++)
+    {
+        for (int j = 0; j < 3; j ++)
+        {
+            sparseMatTrips.push_back(Eigen::Triplet<float>(startRow + i, startCol + j, deritiveMatrix(i, j)));
+        }
+    }
+}
+
+void AdvanceMassSpringSystem(MassSpringSystem & system, float const dt) 
+{
+    int pointCount = system.Positions.size();
+    
+    //对弹簧遍历，计算力
+    std::vector<glm::vec3> forces(system.Positions.size(), glm::vec3(0));
+    for (auto const spring : system.Springs) 
+    {
+        auto const p0 = spring.AdjIdx.first;
+        auto const p1 = spring.AdjIdx.second;
+        glm::vec3 const x01 = system.Positions[p1] - system.Positions[p0];
+        glm::vec3 const v01 = system.Velocities[p1] - system.Velocities[p0];
+        glm::vec3 const e01 = glm::normalize(x01);
+        glm::vec3 f = (system.Stiffness * (glm::length(x01) - spring.RestLength) + system.Damping * glm::dot(v01, e01)) * e01;  //计算弹簧力
+        forces[p0] += f;
+        forces[p1] -= f;
+    }
+    
+    //增加重力
+    for (int i = 0; i < pointCount; i ++)
+    {
+        forces[i] += glm::vec3(0, -system.Gravity, 0) * system.Mass;
+    }
+    
+    //构造质量矩阵
+    std::vector<Eigen::Triplet<float>> sparseMassMatTrips;
+    for (int i = 0; i < pointCount; i ++)
+    {
+        sparseMassMatTrips.push_back(Eigen::Triplet<float>(i * 3, i * 3, system.Mass));
+        sparseMassMatTrips.push_back(Eigen::Triplet<float>(i * 3 + 1, i * 3 + 1, system.Mass));
+        sparseMassMatTrips.push_back(Eigen::Triplet<float>(i * 3 + 2, i * 3 + 2, system.Mass));
+    }
+    Eigen::SparseMatrix<float> sparseMassMat(pointCount * 3, pointCount * 3);
+    sparseMassMat.setFromTriplets(sparseMassMatTrips.begin(), sparseMassMatTrips.end());
+    
+    //对弹簧遍历，计算力对位置的导数
+    std::vector<Eigen::Triplet<float>> sparseMatTrips;
+    Eigen::MatrixXf identity3 = Eigen::MatrixXf::Identity(3, 3);
+    
+    for (auto const spring : system.Springs)
+    {
+        auto const pi = spring.AdjIdx.first;
+        auto const pj = spring.AdjIdx.second;
+        glm::vec3 const xij = system.Positions[pi] - system.Positions[pj];
+        glm::vec3 const eij = glm::normalize(xij);
+        float lengthij = glm::length(xij);
+        
+        //计算i点上的力对i的导数
+        Eigen::MatrixXf eij_e(3, 1);
+        eij_e(0, 0) = eij.x;
+        eij_e(1, 0) = eij.y;
+        eij_e(2, 0) = eij.z;
+        
+        Eigen::MatrixXf eij_e_t = eij_e.transpose();
+        Eigen::MatrixXf eij_e_product = eij_e * eij_e_t;
+        Eigen::MatrixXf deritiveMatrix_ii = ((1.0 - spring.RestLength / lengthij) * (identity3 - eij_e_product) + eij_e_product) * (-system.Stiffness);
+        Eigen::MatrixXf deritiveMatrix_ij = -deritiveMatrix_ii;
+        
+        Eigen::MatrixXf deritiveMatrix_ji = -deritiveMatrix_ii;
+        Eigen::MatrixXf deritiveMatrix_jj = deritiveMatrix_ii;
+        
+        //将矩阵安插到对应的大的雅可比矩阵中
+        insertToTrips(sparseMatTrips, deritiveMatrix_ii, pi, pi);
+        insertToTrips(sparseMatTrips, deritiveMatrix_ij, pi, pj);
+        insertToTrips(sparseMatTrips, deritiveMatrix_ji, pj, pi);
+        insertToTrips(sparseMatTrips, deritiveMatrix_jj, pj, pj);
+    }
+    
+    //构建系数矩阵
+    Eigen::SparseMatrix<float> sparseDeriMat(pointCount * 3, pointCount * 3);
+    sparseDeriMat.setFromTriplets(sparseMatTrips.begin(), sparseMatTrips.end());
+    
+    Eigen::SparseMatrix<float> coffMatrix = sparseMassMat - dt * dt * sparseDeriMat;
+    Eigen::MatrixXf b = dt * (glm2eigen(forces) + dt * sparseDeriMat * glm2eigen(system.Velocities));
+    
+    //求解稀疏线性方程组
+    std::vector<glm::vec3> deltaVelocities = eigen2glm(ComputeSimplicialLLT(coffMatrix, b));
+    
+    //速度和位置更新
+    for (std::size_t i = 0; i < system.Positions.size(); i++)
+    {
+        if (system.Fixed[i]) continue;
+        system.Velocities[i] += deltaVelocities[i];
+        system.Positions[i] += system.Velocities[i] * dt;
+    }
+}
+
+#endif
+
 }
