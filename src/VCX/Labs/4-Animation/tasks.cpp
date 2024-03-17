@@ -496,6 +496,7 @@ void WorldToIKChain(IKSystem & ik, const std::vector<glm::vec3>& worldPosition)
 
 #else
 
+//将局部的雅可比矩阵安排到全局的稀疏的雅可比矩阵三元组中
 void insertToTrips(std::vector<Eigen::Triplet<float>> &sparseMatTrips, const Eigen::MatrixXf& deritiveMatrix, int row, int col)
 {
     int startRow = row * 3;
@@ -513,7 +514,7 @@ void AdvanceMassSpringSystem(MassSpringSystem & system, float const dt)
 {
     int pointCount = system.Positions.size();
     
-    //对弹簧遍历，计算力
+    //对弹簧遍历，计算弹性力和阻尼力
     std::vector<glm::vec3> forces(system.Positions.size(), glm::vec3(0));
     for (auto const spring : system.Springs) 
     {
@@ -522,7 +523,7 @@ void AdvanceMassSpringSystem(MassSpringSystem & system, float const dt)
         glm::vec3 const x01 = system.Positions[p1] - system.Positions[p0];
         glm::vec3 const v01 = system.Velocities[p1] - system.Velocities[p0];
         glm::vec3 const e01 = glm::normalize(x01);
-        glm::vec3 f = (system.Stiffness * (glm::length(x01) - spring.RestLength) + system.Damping * glm::dot(v01, e01)) * e01;  //计算弹簧力
+        glm::vec3 f = (system.Stiffness * (glm::length(x01) - spring.RestLength) + system.Damping * glm::dot(v01, e01)) * e01;  //计算弹簧力和阻尼力
         forces[p0] += f;
         forces[p1] -= f;
     }
