@@ -511,7 +511,7 @@ void insertToTrips(std::vector<Eigen::Triplet<float>> &sparseMatTrips, const Eig
 }
 
 //隐式欧拉积分的实现
-void AdvanceMassSpringSystem_IE(MassSpringSystem & system, float const dt)
+static void AdvanceMassSpringSystem_IEL(MassSpringSystem & system, float const dt)
 {
     int pointCount = system.Positions.size();
     
@@ -599,7 +599,7 @@ void AdvanceMassSpringSystem_IE(MassSpringSystem & system, float const dt)
 }
 
 //pbd算法实现
-void AdvanceMassSpringSystem(MassSpringSystem & system, float const dt)
+static void AdvanceMassSpringSystem_PBD(MassSpringSystem & system, float const dt)
 {
     int pointCount = system.Positions.size();
     
@@ -658,6 +658,19 @@ void AdvanceMassSpringSystem(MassSpringSystem & system, float const dt)
         if (system.Fixed[i]) continue;
         system.Velocities[i] = (newPositions[i] - system.Positions[i]) / dt;
         system.Positions[i] = newPositions[i];
+    }
+}
+
+void AdvanceMassSpringSystem(MassSpringSystem & system, float const dt)
+{
+    if (system.type == Cloth_Sim_Type::IEL)
+    {
+        AdvanceMassSpringSystem_IEL(system, dt);
+    }
+    
+    else if (system.type == Cloth_Sim_Type::PBD)
+    {
+        AdvanceMassSpringSystem_PBD(system, dt);
     }
 }
 

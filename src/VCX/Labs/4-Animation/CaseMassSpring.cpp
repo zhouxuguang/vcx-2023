@@ -20,6 +20,25 @@ namespace VCX::Labs::Animation {
 
     void CaseMassSpring::OnSetupPropsUI() {
         if (ImGui::CollapsingHeader("Algorithm", ImGuiTreeNodeFlags_DefaultOpen)) {
+            
+            const char * ik_items[] = { "implicit Euler", "PBD"};
+            if (ImGui::BeginCombo("Sim method", ik_items[_massSpringSystem.type]))
+            {
+                for (int i = 0; i < 2; i++) {
+                    bool selected = i == _massSpringSystem.type;
+                    if (ImGui::Selectable(ik_items[i], selected)) 
+                    {
+                        printf("当前选中的方法 = %d\n", i);
+                        if (!selected)
+                        {
+                            ResetSystem();
+                            _massSpringSystem.type = (Cloth_Sim_Type)i;
+                        }
+                    }
+                }
+                ImGui::EndCombo();
+            }
+            
             if (ImGui::Button("Reset System")) ResetSystem();
             ImGui::SameLine();
             if (ImGui::Button(_stopped ? "Start Simulation" : "Stop Simulation")) _stopped = ! _stopped;

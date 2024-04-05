@@ -7,8 +7,17 @@
 
 namespace VCX::Labs::Animation {
 
+    enum Cloth_Sim_Type
+    {
+       IEL = 0,
+        PBD = 1
+    };
+
     //质点弹簧系统
     struct MassSpringSystem {
+        
+        Cloth_Sim_Type type = IEL;
+        
         struct Spring {
             std::pair<std::size_t, std::size_t> AdjIdx;        //弹簧边的索引
             float                               RestLength;   //弹簧原长度
