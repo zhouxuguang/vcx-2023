@@ -510,7 +510,8 @@ void insertToTrips(std::vector<Eigen::Triplet<float>> &sparseMatTrips, const Eig
     }
 }
 
-void AdvanceMassSpringSystem(MassSpringSystem & system, float const dt) 
+//隐式欧拉积分的实现
+void AdvanceMassSpringSystem_IE(MassSpringSystem & system, float const dt)
 {
     int pointCount = system.Positions.size();
     
@@ -594,6 +595,69 @@ void AdvanceMassSpringSystem(MassSpringSystem & system, float const dt)
         if (system.Fixed[i]) continue;
         system.Velocities[i] += deltaVelocities[i];
         system.Positions[i] += system.Velocities[i] * dt;
+    }
+}
+
+//pbd算法实现
+void AdvanceMassSpringSystem(MassSpringSystem & system, float const dt)
+{
+    int pointCount = system.Positions.size();
+    
+    std::vector<glm::vec3> newVelocities(pointCount);
+    
+    //对每个顶点进行遍历，由重力和阻尼进行更新速度
+    for (int i = 0; i < pointCount; i ++)
+    {
+        newVelocities[i] = system.Velocities[i] + glm::vec3(0, -system.Gravity, 0) * dt;
+        newVelocities[i] -= newVelocities[i] * system.Damping * dt;
+    }
+    
+    //计算新的位置
+    std::vector<glm::vec3> newPositions(pointCount);
+    for (int i = 0; i < pointCount; i ++)
+    {
+        newPositions[i] = system.Positions[i] + newVelocities[i] * dt;
+    }
+    
+    for (int k = 0; k < 2; k ++)
+    {
+        std::vector<glm::vec3> xNew(pointCount);
+        std::vector<int> pointAdds(pointCount);
+        for (int i = 0; i < pointCount; i ++)
+        {
+            xNew[i] = glm::vec3(0.0f);
+            pointAdds[i] = 0;
+        }
+        
+        //雅可比约束求解方法
+        for (auto const spring : system.Springs)
+        {
+            auto const pi = spring.AdjIdx.first;
+            auto const pj = spring.AdjIdx.second;
+            glm::vec3 const xij = newPositions[pi] - newPositions[pj];
+            glm::vec3 const eij = glm::normalize(xij);
+            float lengthij = glm::length(xij);
+            
+            xNew[pi] += newPositions[pi] - (lengthij - spring.RestLength) * eij * 0.5f;
+            xNew[pj] += newPositions[pj] + (lengthij - spring.RestLength) * eij * 0.5f;
+            
+            pointAdds[pi] += 1;
+            pointAdds[pj] += 1;
+        }
+        
+        //更新顶点位置
+        for (int i = 0; i < pointCount; i ++)
+        {
+            newPositions[i] = (xNew[i] + 0.5f * newPositions[i]) / (pointAdds[i] + 0.5f);
+        }
+    }
+    
+    //速度和位置更新
+    for (std::size_t i = 0; i < system.Positions.size(); i++)
+    {
+        if (system.Fixed[i]) continue;
+        system.Velocities[i] = (newPositions[i] - system.Positions[i]) / dt;
+        system.Positions[i] = newPositions[i];
     }
 }
 
