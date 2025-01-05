@@ -30,6 +30,7 @@ namespace VCX::Labs::Animation
 
     void InverseKinematicsCCD(IKSystem & ik, const glm::vec3 & EndPosition, int maxCCDIKIteration, float eps) 
     {
+        // 前向运动学，计算出所有关节的全局位置和朝向
         ForwardKinematics(ik, 0);
         
         int size = ik.NumJoints();
@@ -117,6 +118,7 @@ void WorldToIKChain(IKSystem & ik, const std::vector<glm::vec3>& worldPosition)
             return;
         }
         
+        // 前向运动学，计算出所有关节的全局位置和朝向
         ForwardKinematics(ik, 0);
         
         glm::vec3 goal = EndPosition;
@@ -195,6 +197,7 @@ void WorldToIKChain(IKSystem & ik, const std::vector<glm::vec3>& worldPosition)
 
     void InverseKinematicsJacobianTranspose(IKSystem & ik, const glm::vec3 & EndPosition, int maxIteration, float eps)
     {
+        // 前向运动学，计算出所有关节的全局位置和朝向
         ForwardKinematics(ik, 0);
         
         int size = ik.NumJoints();
@@ -294,6 +297,7 @@ void WorldToIKChain(IKSystem & ik, const std::vector<glm::vec3>& worldPosition)
                 ik.JointLocalRotation[i] = glm::quat(currentAngle);
             }
             
+            // 前向运动学，计算出所有关节的全局位置和朝向
             ForwardKinematics(ik, 0);
         }
         
@@ -311,6 +315,7 @@ void WorldToIKChain(IKSystem & ik, const std::vector<glm::vec3>& worldPosition)
 
     void InverseKinematicsJacobianInverse(IKSystem & ik, const glm::vec3 & EndPosition, int maxIteration, float eps)
     {
+        // 前向运动学，计算出所有关节的全局位置和朝向
         ForwardKinematics(ik, 0);
         
         int size = ik.NumJoints();
@@ -412,6 +417,7 @@ void WorldToIKChain(IKSystem & ik, const std::vector<glm::vec3>& worldPosition)
                 ik.JointLocalRotation[i] = glm::quat(currentAngle);
             }
             
+            // 前向运动学，计算出所有关节的全局位置和朝向
             ForwardKinematics(ik, 0);
         }
         
