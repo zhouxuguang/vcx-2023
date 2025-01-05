@@ -189,9 +189,9 @@ namespace VCX::Labs::Common {
         ImGui::SetCursorPos(canvasRelativePosition);
         ImVec2 cornerPos = ImGui::GetCursorScreenPos();
         if (result.Flipped)
-            ImGui::Image(tex, { 1.f * canvasWidth, 1.f * canvasHeight }, { 0.f, 1.f }, { 1.f, 0.f });
+            ImGui::Image(result.Image.Get(), { 1.f * canvasWidth, 1.f * canvasHeight }, { 0.f, 1.f }, { 1.f, 0.f });
         else
-            ImGui::Image(tex, { 1.f * canvasWidth, 1.f * canvasHeight });
+            ImGui::Image(result.Image.Get(), { 1.f * canvasWidth, 1.f * canvasHeight });
         ImGui::SetCursorPos(canvasRelativePosition);
         ImGui::InvisibleButton("##io", { 1.f * canvasWidth, 1.f * canvasHeight }, ImGuiButtonFlags_MouseButtonMask_);
         ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, { _layout.Spacing * 2, _layout.Spacing * 2 });

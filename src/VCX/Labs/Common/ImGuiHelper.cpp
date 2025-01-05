@@ -32,8 +32,8 @@ namespace VCX::Labs::Common::ImGuiHelper {
         ImGui::Text("Max: (%.0f, %.0f)", regionX + regionSize, regionY + regionSize);
         ImVec2 uv0 = ImVec2(regionX / width, flipped ? 1 - regionY / height : regionY / height);
         ImVec2 uv1 = ImVec2((regionX + regionSize) / width, flipped ? 1 - (regionY + regionSize) / height : (regionY + regionSize) / height);
-        ImGui::Image(
-            reinterpret_cast<void *>(std::uintptr_t(tex.Get())),
+        ImGui::Image(tex.Get(),
+            //reinterpret_cast<void *>(std::uintptr_t(tex.Get())),
             ImVec2(regionSize * zoomLevel, regionSize * zoomLevel),
             uv0,
             uv1,
